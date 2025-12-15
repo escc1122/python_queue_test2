@@ -3,7 +3,7 @@
 提供 Redis 佇列操作和消費者功能。
 
 主要元件：
-- QueueName: 佇列名稱的統一定義（Enum）
+- QueueName: 佇列名稱註冊管理
 - Queue: Redis 佇列操作類別
 - RedisClient: Redis 通用操作客戶端
 - QueueWorker: Redis 佇列消費者類別
@@ -13,6 +13,9 @@
     >>> import json
     >>> from app.utils.queue import QueueName, Queue, QueueWorker
     >>> from app.utils.queue.handlers import EmailHandler
+    >>>
+    >>> # 註冊佇列名稱
+    >>> QueueName.register("EMAIL", "email_queue")
     >>>
     >>> # 取得佇列並推入任務
     >>> queue = Queue.get(QueueName.EMAIL)

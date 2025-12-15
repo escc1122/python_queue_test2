@@ -55,12 +55,17 @@ class TestQueue:
         # 不同名稱應該返回不同實例
         assert queue1 is not queue2
 
-    def test_queue_with_enum(self):
-        """測試使用 QueueName Enum 創建 Queue"""
-        queue = Queue.get(QueueName.EMAIL)
+    def test_queue_with_registered_name(self):
+        """測試使用註冊的 QueueName 創建 Queue"""
+        # 註冊一個測試佇列
+        QueueName.register("TEST_QUEUE", "test_registered_queue")
 
-        assert queue.name == str(QueueName.EMAIL)
-        assert queue.name == "email_queue"
+        try:
+            queue = Queue.get(QueueName.TEST_QUEUE)
+            assert queue.name == "test_registered_queue"
+        finally:
+            # 清理
+            QueueName.unregister("TEST_QUEUE")
 
     def test_queue_name_property(self):
         """測試 Queue.name 屬性"""

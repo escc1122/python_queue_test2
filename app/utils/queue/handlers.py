@@ -1,9 +1,9 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
+import logging
 import json
 from typing import Any
 from .exceptions import InvalidPayloadError
-from ..logging_config import setup_logging
 
 
 class ItemHandler(ABC):
@@ -35,7 +35,7 @@ class LoggingHandler(ItemHandler):
 
     def __init__(self):
         """初始化 LoggingHandler"""
-        self._logger = setup_logging("queue.handler.logging")
+        self._logger = logging.getLogger(f"{__name__}.LoggingHandler")
 
     def handle_item(self, queue_name: str, payload: str) -> None:
         """記錄接收到的項目"""
@@ -50,7 +50,7 @@ class JsonHandler(ItemHandler):
 
     def __init__(self):
         """初始化 JsonHandler"""
-        self._logger = setup_logging("queue.handler.json")
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def handle_item(self, queue_name: str, payload: str) -> None:
         """處理 JSON 格式的項目"""

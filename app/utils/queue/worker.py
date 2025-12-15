@@ -1,11 +1,11 @@
 from __future__ import annotations
+import logging
 import threading
 import time
 from .client import Queue
 from .names import QueueName
 from .handlers import ItemHandler
 from .exceptions import QueueError
-from ..logging_config import setup_logging
 
 
 class QueueWorker:
@@ -42,8 +42,7 @@ class QueueWorker:
         queue_name: str | QueueName,
         pop_timeout: int,
         handler: ItemHandler,
-        num_threads: int = 1,
-        logger_name: str | None = None
+        num_threads: int = 1
     ) -> None:
         """
         初始化 QueueWorker
@@ -53,7 +52,6 @@ class QueueWorker:
             pop_timeout: BLPOP 的超時秒數
             handler: 處理項目的 handler 實例
             num_threads: 並行處理的線程數量（預設 1）
-            logger_name: 自定義 logger 名稱，預設為 "queue.worker.{queue_name}"
         """
         self._queue_name = str(queue_name)
         self._queue = Queue.get(queue_name)
@@ -62,10 +60,7 @@ class QueueWorker:
         self._num_threads = max(1, num_threads)
         self._threads: list[threading.Thread] = []
         self._stop_flag = threading.Event()
-
-        # 設定 logger
-        logger_name = logger_name or f"queue.worker.{self._queue_name}"
-        self._logger = setup_logging(logger_name)
+        self._logger = logging.getLogger(f"{__name__}.{self._queue_name}")
 
     def _worker_loop(self, thread_id: int) -> None:
         """
@@ -209,7 +204,7 @@ class QueueWorker:
         設定全域停止旗標，所有 worker 實例都會停止。
         這是優雅關機的推薦方式。
         """
-        logger = setup_logging("queue.worker")
+        logger = logging.getLogger(__name__)
         logger.info("Setting global stop flag for all workers")
         cls._global_stop_flag.set()
 
@@ -221,6 +216,6 @@ class QueueWorker:
         在停止所有 worker 後，如果需要重新啟動新的 worker，
         必須先調用此方法重置全域旗標。
         """
-        logger = setup_logging("queue.worker")
+        logger = logging.getLogger(__name__)
         logger.info("Resetting global stop flag")
         cls._global_stop_flag.clear()
