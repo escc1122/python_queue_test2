@@ -1,182 +1,175 @@
-# Dramatiq Producer-Consumer 範例
+# Dramatiq DDD Producer-Consumer 專案
 
-這是一個使用 Dramatiq 實作的 Producer-Consumer 模式範例。
+基於 DDD (Domain-Driven Design) 架構的分散式任務隊列系統。
 
 ## 專案結構
 
 ```
-dramatiq_project/
-├── broker.py          # Redis broker 配置
-├── jobs/              # 任務定義
-│   ├── __init__.py
-│   └── email.py       # 郵件相關任務
-├── producer.py        # 生產者 - 發送任務
-├── consumer.py        # 消費者 - 處理任務
+project/
+├── deploy/
+│   ├── envs/              # 環境配置集中管理
+│   │   ├── .env.local    # 單機測試
+│   │   ├── .env.redis    # Redis 機器
+│   │   ├── .env.email    # Email Context
+│   │   ├── .env.data     # Data Context
+│   │   └── .env.report   # Report Context
+│   └── README.md
+│
+├── contexts/              # 按業務領域劃分
+│   ├── email/
+│   │   ├── jobs.py       # Email 相關任務
+│   │   ├── consumer.py   # Email Consumer
+│   │   └── services.py   # Email 業務邏輯 (可選)
+│   ├── data/
+│   └── report/
+│
+├── shared/                # 共享內核
+│   ├── broker.py         # Redis broker 配置
+│   ├── queues.py         # Queue Names 集中管理
+│   └── logger.py         # 日誌配置
+│
+├── logs/                  # 日誌目錄 (自動生成)
+│
+├── docker-compose.yml     # Docker Compose 配置
+├── Dockerfile
+├── app.py                # 統一入口
+├── Pipfile
 └── README.md
 ```
 
-## 安裝依賴
+## 關鍵設計
+
+### DDD 架構
+- **按 Context 劃分** - Email, Data, Report 三個獨立的業務領域
+- **高內聚低耦合** - 每個 Context 包含自己的 jobs, consumer, services
+- **通過 Queue 通信** - Context 之間透過 Message Queue 解耦
+
+### 技術棧
+- **Pipenv** - Python 依賴管理
+- **Dramatiq** - 分散式任務隊列
+- **Redis** - Message Broker (Port: 6380, 密碼保護)
+- **Docker Compose** - 容器編排 (用 profiles 控制)
+
+### 部署架構
+- **機器 1**: Redis Server (Port 6380)
+- **機器 2**: Email Context Consumer
+- **機器 3**: Data Context Consumer  
+- **機器 4**: Report Context Consumer
+- **其他**: Producer (可在任意機器執行)
+
+### Queue 管理
+- 集中定義在 `shared/queues.py`
+- `QueueNames` - 所有 Queue 名稱
+- `ContextQueues` - 每個 Context 監聽的隊列
+- Context 之間可共用 Queue (如 notification, log)
+
+### 日誌系統
+- 從環境變數 `CONTEXT_NAME` 讀取
+- Volume 掛載到宿主機 `./logs/{context}/`
+- 自動輪轉 (10MB per file, 5 backups)
+- 分離 error log
+
+## 快速開始
+
+### 安裝依賴
 
 ```bash
-pip install dramatiq[redis]
+pipenv install
 ```
 
-## 使用方式
-
-### 1. 確保 Redis 正在運行
+### 單機測試
 
 ```bash
-redis-server
+# 1. 複製配置
+cp deploy/envs/.env.local .env
+
+# 2. 啟動所有服務
+docker-compose up -d
+
+# 3. 查看狀態
+docker-compose ps
+
+# 4. 查看日誌
+docker-compose logs -f consumer-email
+tail -f logs/email/email.log
+
+# 5. 執行 producer (測試)
+docker run --rm \
+  -e REDIS_HOST=127.0.0.1 \
+  -e REDIS_PORT=6380 \
+  -e REDIS_PASSWORD=test_password_123 \
+  dramatiq-app python app.py producer
+
+# 6. 停止
+docker-compose down
 ```
 
-### 2. 啟動 Consumer (終端 1)
+### 多機部署
+
+詳見 `deploy/README.md`
+
+## 環境變數
+
+| 變數 | 說明 | 預設值 |
+|------|------|--------|
+| `COMPOSE_PROFILES` | 啟動的服務 | - |
+| `CONTEXT_NAME` | Context 名稱 (email/data/report) | app |
+| `LOG_DIR` | 日誌目錄 | ./logs |
+| `REDIS_HOST` | Redis 主機 | localhost |
+| `REDIS_PORT` | Redis 端口 | 6380 |
+| `REDIS_DB` | Redis 資料庫 | 0 |
+| `REDIS_PASSWORD` | Redis 密碼 | - |
+| `REDIS_EXPOSE` | Redis 暴露位址 | 0.0.0.0 |
+
+## 監控
+
+### 查看 Redis 狀態
 
 ```bash
-python consumer.py
+docker exec -it dramatiq-redis redis-cli -a your_password
+
+# 查看隊列長度
+LLEN "dramatiq:email.welcome"
+
+# 查看所有 key
+KEYS "dramatiq:*"
 ```
 
-輸出:
-```
-=== Consumer: 啟動任務處理器 ===
-
-Worker-1 已啟動,等待任務...
-Worker-2 已啟動,等待任務...
-已啟動 2 個 workers
-按 Ctrl+C 停止
-```
-
-### 3. 執行 Producer 發送任務 (終端 2)
+### 查看日誌
 
 ```bash
-python producer.py
+# 容器日誌
+docker-compose logs -f consumer-email
+
+# 檔案日誌
+tail -f logs/email/email.log
+tail -f logs/email/email_error.log
 ```
 
-輸出:
-```
-=== Producer: 發送任務到隊列 ===
+## 開發指南
 
-發送任務...
+### 新增 Context
 
-✓ 所有任務已發送到隊列!
-請確保 consumer.py 正在運行
-```
+1. 在 `contexts/` 建立新目錄
+2. 新增 `jobs.py`, `consumer.py`
+3. 在 `shared/queues.py` 定義 Queue Names
+4. 在 `app.py` 註冊 Consumer
+5. 在 `docker-compose.yml` 新增服務
+6. 建立對應的 `.env` 配置
 
-### 4. 觀察 Consumer 處理任務
+### 新增任務
 
-Consumer 終端會顯示:
-```
-發送歡迎郵件給 user1@example.com
-[Worker-1] ✓ 歡迎郵件已發送給用戶 1
-通知用戶 3: 你有新訊息
-[Worker-2] ✓ 通知已發送
-...
-```
+1. 在對應 Context 的 `jobs.py` 新增 `@dramatiq.actor`
+2. 在 `shared/queues.py` 定義 Queue Name
+3. 在其他地方呼叫 `task_name.send(args)`
 
-## 添加新任務
+## 安全建議
 
-### 1. 在 jobs 目錄創建新模塊
+- 使用強密碼: `openssl rand -base64 32`
+- 配置防火牆規則限制 6380 端口訪問
+- 生產環境使用 TLS/SSL (Redis 6+)
+- 定期備份 Redis 資料
 
-例如 `jobs/payment.py`:
+## License
 
-```python
-import dramatiq
-
-@dramatiq.actor
-def process_payment(order_id: int, amount: float):
-    print(f"處理付款: 訂單 {order_id}, 金額 ${amount}")
-    return f"付款成功"
-```
-
-### 2. 在 jobs/__init__.py 導出
-
-```python
-from .email import send_welcome_email, send_notification
-from .payment import process_payment
-
-__all__ = [
-    'send_welcome_email',
-    'send_notification',
-    'process_payment',
-]
-```
-
-### 3. 在 consumer.py 導入模塊
-
-```python
-import jobs.email
-import jobs.payment  # 新增
-```
-
-### 4. 在 producer.py 使用
-
-```python
-from jobs import process_payment
-
-process_payment.send(1001, 99.99)
-```
-
-## 配置說明
-
-### 修改 Worker 數量
-
-在 `consumer.py` 中:
-
-```python
-num_workers = 4  # 改成你想要的數量
-```
-
-### 修改 Redis 連接
-
-在 `broker.py` 中:
-
-```python
-broker = RedisBroker(
-    host="localhost",
-    port=6379,
-    db=0,  # 可指定 Redis database
-)
-```
-
-### 任務配置選項
-
-```python
-@dramatiq.actor(
-    max_retries=3,        # 最大重試次數
-    time_limit=60000,     # 超時時間 (毫秒)
-    queue_name="default"  # 隊列名稱
-)
-def my_task():
-    pass
-```
-
-## 注意事項
-
-- 確保 Redis 在運行
-- Consumer 必須先啟動,才能處理 Producer 發送的任務
-- 按 Ctrl+C 停止 Consumer
-- 任務會持久化在 Redis 中,即使 Consumer 停止也不會丟失
-
-## 進階功能
-
-### 延遲執行
-
-```python
-send_email.send_with_options(
-    args=(1, "user@example.com"),
-    delay=5000  # 延遲 5 秒
-)
-```
-
-### 優先級隊列
-
-```python
-@dramatiq.actor(queue_name="high_priority")
-def urgent_task():
-    pass
-
-@dramatiq.actor(queue_name="low_priority")
-def background_task():
-    pass
-```
-
-然後啟動不同的 consumer 處理不同隊列。
+MIT
