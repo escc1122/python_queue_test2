@@ -46,11 +46,11 @@ def run_producer():
     send_welcome_email.send(2, "user2@example.com")
     logging.info("已發送: send_welcome_email(2)")
     
-    process_csv.send("/data/sales.csv")
-    logging.info("已發送: process_csv")
-    
-    generate_report.send(101)
-    logging.info("已發送: generate_report(101)")
+    # process_csv.send("/data/sales.csv")
+    # logging.info("已發送: process_csv")
+    #
+    # generate_report.send(101)
+    # logging.info("已發送: generate_report(101)")
     
     logging.info("✓ 所有任務已發送")
 

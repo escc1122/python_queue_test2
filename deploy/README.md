@@ -13,18 +13,15 @@
 ## 單機測試
 
 ```bash
-# 1. 複製配置
-cp deploy/envs/.env.local .env
+# 1. 啟動所有服務
+docker compose --env-file ./deploy/envs/.env.local up -d
 
-# 2. 啟動所有服務
-docker-compose up -d
-
-# 3. 查看狀態
+# 2. 查看狀態
 docker-compose ps
 
-# 4. 執行 producer (測試)
+# 3. 執行 producer (測試)
 docker run --rm \
-  -e REDIS_HOST=localhost \
+  -e REDIS_HOST=127.0.0.1 \
   -e REDIS_PORT=6380 \
   -e REDIS_PASSWORD=test_password_123 \
   dramatiq-ddd-app python app.py producer
@@ -42,16 +39,11 @@ docker-compose down
 ### 機器 1: Redis Server (192.168.1.100)
 
 ```bash
-# 1. 複製配置
-cp deploy/envs/.env.redis .env
+# 1. 啟動 Redis
+docker compose --env-file ./deploy/envs/.env.redis up -d
 
-# 2. 修改密碼(如需要)
-nano .env
 
-# 3. 啟動 Redis
-docker-compose up -d
-
-# 4. 驗證
+# 2. 驗證
 docker exec -it dramatiq-redis redis-cli -a production_strong_password_456 ping
 ```
 
@@ -59,33 +51,12 @@ docker exec -it dramatiq-redis redis-cli -a production_strong_password_456 ping
 
 ```bash
 # 1. 複製配置
-cp deploy/envs/.env.email .env
+docker compose --env-file ./deploy/envs/.env.email up -d
 
-# 2. 確認 Redis IP 和密碼
-nano .env
 
-# 3. 啟動 Consumer
-docker-compose up -d
-
-# 4. 查看日誌
+# 2. 查看日誌
 docker-compose logs -f
 tail -f logs/email/email.log
-```
-
-### 機器 3: Data Consumer (192.168.1.102)
-
-```bash
-cp deploy/envs/.env.data .env
-docker-compose up -d
-docker-compose logs -f
-```
-
-### 機器 4: Report Consumer (192.168.1.103)
-
-```bash
-cp deploy/envs/.env.report .env
-docker-compose up -d
-docker-compose logs -f
 ```
 
 ## Producer 執行
